@@ -23,7 +23,7 @@ export async function activate(context: ExtensionContext) {
 	const sidebarProvider = new App(context.extensionUri);
 	context.subscriptions.push(
 		window.registerWebviewViewProvider(
-			"tabby.myextension-sidebar",
+			"tabby.chatView",
 			sidebarProvider
 		)
 	);

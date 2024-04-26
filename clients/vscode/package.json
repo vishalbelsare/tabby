@@ -28,8 +28,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:myextension-sidebar"
+    "onStartupFinished"
   ],
   "main": "./dist/node/extension.js",
   "browser": "./dist/web/extension.js",
@@ -233,20 +232,19 @@
     "viewsContainers": {
 			"activitybar": [
 				{
-					"id": "myextension-sidebar-view",
-					"title": "My Extension",
-					"icon": "assets/logo.png"
+					"id": "chatView",
+					"title": "Tabby",
+					"icon": "assets/test-icon.svg"
 				}
 			]
 		},
 		"views": {
-			"myextension-sidebar-view": [
+			"chatView": [
 				{
 					"type": "webview",
-					"id": "tabby.myextension-sidebar",
-					"name": "MyExtension",
-					"icon": "assets/logo.png",
-					"contextualTitle": "MyExtension"
+					"id": "tabby.chatView",
+					"name": "",
+          "visibility": "visible"
 				}
 			]
 		}
