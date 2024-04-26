@@ -1,6 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import { ExtensionContext, commands, languages, workspace } from "vscode";
+import { ExtensionContext, commands, languages, workspace, window, ViewColumn, Uri } from "vscode";
+import App from './App';
+import path from "path";
 import { logger } from "./logger";
 import { createAgentInstance, disposeAgentInstance } from "./agent";
 import { tabbyCommands } from "./commands";
@@ -15,6 +17,16 @@ export async function activate(context: ExtensionContext) {
   const agent = await createAgentInstance(context);
   const completionProvider = new TabbyCompletionProvider();
   context.subscriptions.push(languages.registerInlineCompletionItemProvider({ pattern: "**" }, completionProvider));
+
+  // testing
+  // Register the Sidebar Panel
+	const sidebarProvider = new App(context.extensionUri);
+	context.subscriptions.push(
+		window.registerWebviewViewProvider(
+			"tabby.myextension-sidebar",
+			sidebarProvider
+		)
+	);
 
   const collectSnippetsFromRecentChangedFilesConfig =
     agent.getConfig().completion.prompt.collectSnippetsFromRecentChangedFiles;
