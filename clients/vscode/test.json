@@ -1,0 +1,21 @@
+{
+  "viewsContainers": {
+    "activitybar": [
+      {
+        "id": "chatView",
+        "title": "Tabby",
+        "icon": "assets/test-icon.svg"
+      }
+    ]
+  },
+  "views": {
+    "chatView": [
+      {
+        "type": "webview",
+        "id": "tabby.chatView",
+        "name": "",
+        "visibility": "visible"
+      }
+    ]
+  }
+}

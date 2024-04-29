@@ -1,3 +1,5 @@
+import { Uri, Webview } from "vscode";
+
 export function getWordStartIndices(text: string): number[] {
   const indices: number[] = [];
   const re = /\b\w/g;
@@ -78,4 +80,24 @@ export function extractSematicSymbols(text: string): string {
   return [
     ...new Set(text.match(re)?.filter((symbol) => symbol.length > 2 && !reservedKeywords.includes(symbol))).values(),
   ].join(" ");
+}
+
+/**
+ * This function is primarily used to help enforce content security
+ * policies for resources/scripts being executed in a webview context.
+ */
+export function getNonce() {
+  let text = "";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+}
+
+/**
+ * A helper function which will get the webview URI of a given file or resource.
+ */
+export function getUri(webview: Webview, extensionUri: Uri, pathList: string[]) {
+  return webview.asWebviewUri(Uri.joinPath(extensionUri, ...pathList));
 }

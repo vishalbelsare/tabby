@@ -1,8 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import { ExtensionContext, commands, languages, workspace, window, ViewColumn, Uri } from "vscode";
-import App from './App';
-import path from "path";
+import { ChatViewProvider } from "./ChatViewProvider";
 import { logger } from "./logger";
 import { createAgentInstance, disposeAgentInstance } from "./agent";
 import { tabbyCommands } from "./commands";
@@ -20,13 +19,18 @@ export async function activate(context: ExtensionContext) {
 
   // testing
   // Register the Sidebar Panel
-	const sidebarProvider = new App(context.extensionUri);
+  const chatViewProvider = new ChatViewProvider(context.extensionUri);
 	context.subscriptions.push(
 		window.registerWebviewViewProvider(
 			"tabby.chatView",
-			sidebarProvider
+			chatViewProvider,
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+      },
 		)
 	);
+
+  // console.log('chatViewProvider.getView()', chatViewProvider.getView())
 
   const collectSnippetsFromRecentChangedFilesConfig =
     agent.getConfig().completion.prompt.collectSnippetsFromRecentChangedFiles;
@@ -49,7 +53,7 @@ export async function activate(context: ExtensionContext) {
   const statusBarItem = new TabbyStatusBarItem(context, completionProvider);
   context.subscriptions.push(statusBarItem.register());
 
-  context.subscriptions.push(...tabbyCommands(context, completionProvider, statusBarItem));
+  context.subscriptions.push(...tabbyCommands(context, completionProvider, statusBarItem, chatViewProvider));
 
   const updateIsChatEnabledContextVariable = () => {
     if (agent.getStatus() === "ready") {

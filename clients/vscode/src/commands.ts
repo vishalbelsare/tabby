@@ -9,6 +9,7 @@ import {
   window,
   env,
   commands,
+  WebviewView
 } from "vscode";
 import os from "os";
 import { strict as assert } from "assert";
@@ -17,6 +18,7 @@ import { agent } from "./agent";
 import { notifications } from "./notifications";
 import { TabbyCompletionProvider } from "./TabbyCompletionProvider";
 import { TabbyStatusBarItem } from "./TabbyStatusBarItem";
+import { ChatViewProvider } from "./ChatViewProvider";
 
 const configTarget = ConfigurationTarget.Global;
 
@@ -321,29 +323,58 @@ const resetMutedNotifications = (context: ExtensionContext, statusBarItem: Tabby
   };
 };
 
-const explainCodeBlock: Command = {
-  command: "tabby.experimental.chat.explainCodeBlock",
-  callback: async () => {
-    const editor = window.activeTextEditor;
-    const configuration = agent().getConfig();
-    const serverHost = configuration.server.endpoint;
+const explainCodeBlock = (chatViewProvider: ChatViewProvider): Command => {
+  return {
+    command: "tabby.experimental.chat.explainCodeBlock",
+    callback: async () => {
+      const editor = window.activeTextEditor;
+      const configuration = agent().getConfig();
+      const serverHost = configuration.server.endpoint;
 
-    if (editor) {
-      const { languageId } = editor.document;
-      const language = languageId.startsWith("typescript") ? "typescript" : languageId;
-      const text = editor.document.getText(editor.selection);
-      const encodedText = encodeURIComponent("```" + `${language}\n${text}\n` + "```");
-      await env.openExternal(Uri.parse(`${serverHost}/playground?initialMessage=${encodedText}`));
-    } else {
-      window.showInformationMessage("No active editor");
+      if (editor) {
+        const { languageId } = editor.document;
+        const language = languageId.startsWith("typescript") ? "typescript" : languageId;
+        const text = editor.document.getText(editor.selection);
+        // const encodedText = encodeURIComponent("```" + `${language}\n${text}\n` + "```");
+        // await env.openExternal(Uri.parse(`${serverHost}/playground?initialMessage=${encodedText}`));
+        // console.log("here chatView", chatView)
+        // chatView?.webview.postMessage({
+        //   command: 'explainThis',
+        //   text,
+        //   language
+        // });
+        // ChatViewPanel.render(context.extensionUri);
+        // console.log('ChatViewPanel.currentPanel', ChatViewPanel.currentPanel)
+        // const webview = ChatViewPanel.currentPanel?.getWebView()
+        // webview?.postMessage({
+          // command: 'explainThis',
+          // text,
+          // language
+        // });
+        const configuration = workspace.getConfiguration("tabby");
+        const apiEndpoint = configuration.get("api.endpoint", "")
+        console.log('apiEndpoint', apiEndpoint)
+        const token = agent().getConfig()["server"]["token"].trim();
+        commands.executeCommand("tabby.chatView.focus");
+        chatViewProvider.postMessage({
+          command: 'explainThis',
+          text,
+          language,
+          token,
+          apiEndpoint
+        })
+      } else {
+        window.showInformationMessage("No active editor");
+      }
     }
-  },
+  }
 };
 
 export const tabbyCommands = (
   context: ExtensionContext,
   completionProvider: TabbyCompletionProvider,
   statusBarItem: TabbyStatusBarItem,
+  chatViewProvider: ChatViewProvider
 ) =>
   [
     toggleInlineCompletionTriggerMode,
@@ -363,5 +394,5 @@ export const tabbyCommands = (
     openOnlineHelp,
     muteNotifications(context, statusBarItem),
     resetMutedNotifications(context, statusBarItem),
-    explainCodeBlock,
+    explainCodeBlock(chatViewProvider),
   ].map((command) => commands.registerCommand(command.command, command.callback, command.thisArg));

@@ -28,7 +28,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:chatView"
   ],
   "main": "./dist/node/extension.js",
   "browser": "./dist/web/extension.js",
@@ -230,26 +231,27 @@
       }
     ],
     "viewsContainers": {
-			"activitybar": [
-				{
-					"id": "chatView",
-					"title": "Tabby",
-					"icon": "assets/test-icon.svg"
-				}
-			]
-		},
-		"views": {
-			"chatView": [
-				{
-					"type": "webview",
-					"id": "tabby.chatView",
-					"name": "",
+      "activitybar": [
+        {
+          "id": "chatView",
+          "title": "Tabby",
+          "icon": "assets/test-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "chatView": [
+        {
+          "type": "webview",
+          "id": "tabby.chatView",
+          "name": "",
           "visibility": "visible"
-				}
-			]
-		}
+        }
+      ]
+    }
   },
   "scripts": {
+    "install:all": "yarn && cd webview && yarn",
     "prebuild": "cd ../tabby-agent && yarn build",
     "build": "tsc --noEmit && tsup --minify --treeshake smallest",
     "watch": "tsup --sourcemap --watch ./ --ignore-watch ./dist --ignore-watch ./.vscode-test-web --watch ../tabby-agent/dist",
@@ -260,7 +262,9 @@
     "vscode:prepackage": "yarn build",
     "vscode:package": "vsce package --no-dependencies",
     "vscode:prepublish": "yarn build",
-    "vscode:publish": "vsce publish --no-dependencies"
+    "vscode:publish": "vsce publish --no-dependencies",
+    "webview:dev": "cd webview && yarn dev",
+    "webview:build": "cd webview && yarn build"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.1",
