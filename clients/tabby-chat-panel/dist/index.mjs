@@ -6,7 +6,8 @@ function createClient(endpoint) {
 function createServer(endpoint, api) {
   const server = createEndpoint(endpoint);
   server.expose({
-    init: api.init
+    init: api.init,
+    sendMessage: api.sendMessage
   });
   return server;
 }

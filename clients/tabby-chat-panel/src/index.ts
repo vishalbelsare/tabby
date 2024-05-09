@@ -1,4 +1,4 @@
-import { MessageEndpoint, createEndpoint, fromIframe, fromInsideIframe } from '@remote-ui/rpc'
+import { MessageEndpoint, createEndpoint } from '@remote-ui/rpc'
 
 export interface LineRange {
   start: number
@@ -18,15 +18,17 @@ export interface FetcherOptions {
   authorization: string
 }
 
-export interface InitRequest {
+export interface ChatMessage {
   message?: string
   selectContext?: Context
   relevantContext?: Array<Context>
-  fetcherOptions?: FetcherOptions
 }
 
+export interface InitRequest extends ChatMessage, FetcherOptions {}
+
 export interface Api {
-  init: (request: InitRequest) => void
+  init: (request: InitRequest) => void,
+  sendMessage: (message: ChatMessage) => void
 }
 
 export function createClient(endpoint: MessageEndpoint) {
@@ -34,9 +36,10 @@ export function createClient(endpoint: MessageEndpoint) {
 }
 
 export function createServer(endpoint: MessageEndpoint, api: Api) {
-    const server = createEndpoint(endpoint)
-    server.expose({
-      init: api.init,
-    })
-    return server;
+  const server = createEndpoint(endpoint)
+  server.expose({
+    init: api.init,
+    sendMessage: api.sendMessage
+  })
+  return server;
 }
