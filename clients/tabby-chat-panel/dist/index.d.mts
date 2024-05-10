@@ -15,16 +15,18 @@ type Context = FileContext;
 interface FetcherOptions {
     authorization: string;
 }
-interface ChatMessage {
-    message?: string;
-    selectContext?: Context;
-    relevantContext?: Array<Context>;
-}
-interface InitRequest extends ChatMessage, FetcherOptions {
+interface InitRequest {
+    fetcherOptions: FetcherOptions;
+    test: string;
 }
 interface Api {
     init: (request: InitRequest) => void;
     sendMessage: (message: ChatMessage) => void;
+}
+interface ChatMessage {
+    message: string;
+    selectContext?: Context;
+    relevantContext?: Array<Context>;
 }
 declare function createClient(endpoint: MessageEndpoint): _remote_ui_rpc.Endpoint<Api>;
 declare function createServer(endpoint: MessageEndpoint, api: Api): _remote_ui_rpc.Endpoint<unknown>;

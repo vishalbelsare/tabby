@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 
 import { useStore } from '@/lib/hooks/use-store'
 import { useChatStore } from '@/lib/stores/chat-store'
@@ -8,6 +8,9 @@ import { IconClose } from '@/components/ui/icons'
 
 import { QuickActionEventPayload } from '../lib/event-emitter'
 import { SourceCodeBrowserContext } from './source-code-browser'
+
+// FIXME(wwayne): using tabby-chat-panel package
+import { useClient } from '../../chat/src/react'
 
 interface ChatSideBarProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {}
@@ -21,6 +24,7 @@ export const ChatSideBar: React.FC<ChatSideBarProps> = ({
   )
   const activeChatId = useStore(useChatStore, state => state.activeChatId)
   const iframeRef = React.useRef<HTMLIFrameElement>(null)
+  const client = useClient(iframeRef)
 
   const getPrompt = ({
     action,
@@ -50,23 +54,51 @@ export const ChatSideBar: React.FC<ChatSideBarProps> = ({
     return `${builtInPrompt}\n${'```'}${codeBlockMeta}\n${code}\n${'```'}\n`
   }
 
-  React.useEffect(() => {
-    const contentWindow = iframeRef.current?.contentWindow
+  // React.useEffect(() => {
+  //   const contentWindow = iframeRef.current?.contentWindow
 
-    if (pendingEvent) {
-      contentWindow?.postMessage({
-        action: 'append',
-        payload: getPrompt(pendingEvent)
-      })
-      setPendingEvent(undefined)
-    }
-  }, [pendingEvent, iframeRef.current?.contentWindow])
+  //   if (pendingEvent) {
+  //     contentWindow?.postMessage({
+  //       action: 'append',
+  //       payload: getPrompt(pendingEvent)
+  //     })
+  //     setPendingEvent(undefined)
+  //   }
+  // }, [pendingEvent, iframeRef.current?.contentWindow])
+
+  useEffect(() => {
+    setTimeout(() => {
+      initCall()
+    }, 3000)
+  }, [client])
+
+  const initCall = () => {
+    client?.call.init({
+      fetcherOptions: {
+        authorization: 'test'
+      }
+    }).then(res => console.log(res))
+
+    // setTimeout(() => {
+    //   client?.call.sendMessage({
+    //     message: 'Message 1'
+    //   })
+    // }, 1000)
+
+    // setTimeout(() => {
+    //   client?.call.sendMessage({
+    //     message: 'Message 2'
+    //   })
+    // }, 3000)
+  }
+
+  
 
   return (
     <div className={cn('flex h-full flex-col', className)} {...props}>
       <Header />
       <iframe
-        src={`/playground`}
+        src={`/chat`}
         className="w-full flex-1 border-0"
         key={activeChatId}
         ref={iframeRef}
