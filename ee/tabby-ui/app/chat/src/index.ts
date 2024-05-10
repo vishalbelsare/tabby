@@ -1,4 +1,5 @@
 import { MessageEndpoint, createEndpoint } from '@remote-ui/rpc'
+import { createThread } from "@quilted/threads"
 
 export interface LineRange {
   start: number
@@ -24,7 +25,8 @@ export interface InitRequest {
 
 export interface Api {
   init: (request: InitRequest) => void,
-  sendMessage: (message: ChatMessage) => void
+  sendMessage: (message: ChatMessage) => void,
+  test: () => string
 }
 
 export interface ChatMessage {
@@ -33,15 +35,16 @@ export interface ChatMessage {
   relevantContext?: Array<Context>
 }
 
-export function createClient(endpoint: MessageEndpoint) {
-  return createEndpoint<Api>(endpoint)
+export function createClient(fn: () => typeof createThread) {
+  // return createEndpoint<Api>(endpoint)
 }
 
 export function createServer(endpoint: MessageEndpoint, api: Api) {
   const server = createEndpoint(endpoint)
   server.expose({
     init: api.init,
-    sendMessage: api.sendMessage
+    sendMessage: api.sendMessage,
+    test: api.test
   })
   return server;
 }

@@ -65,32 +65,10 @@ export const ChatSideBar: React.FC<ChatSideBarProps> = ({
   //     setPendingEvent(undefined)
   //   }
   // }, [pendingEvent, iframeRef.current?.contentWindow])
-
-  useEffect(() => {
-    setTimeout(() => {
-      initCall()
-    }, 3000)
+  
+  React.useEffect(() => {
+    client?.test().then(res => console.log(res))
   }, [client])
-
-  const initCall = () => {
-    client?.call.init({
-      fetcherOptions: {
-        authorization: 'test'
-      }
-    }).then(res => console.log(res))
-
-    // setTimeout(() => {
-    //   client?.call.sendMessage({
-    //     message: 'Message 1'
-    //   })
-    // }, 1000)
-
-    // setTimeout(() => {
-    //   client?.call.sendMessage({
-    //     message: 'Message 2'
-    //   })
-    // }, 3000)
-  }
 
   
 
