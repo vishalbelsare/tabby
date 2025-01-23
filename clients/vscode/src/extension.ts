@@ -1,75 +1,99 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import { ExtensionContext, commands, languages, workspace } from "vscode";
+import { window, ExtensionContext, Uri } from "vscode";
+import { LanguageClientOptions } from "vscode-languageclient";
+import { LanguageClient as NodeLanguageClient, ServerOptions, TransportKind } from "vscode-languageclient/node";
+import { LanguageClient as BrowserLanguageClient } from "vscode-languageclient/browser";
 import { getLogger } from "./logger";
-import { createAgentInstance, disposeAgentInstance } from "./agent";
-import { tabbyCommands } from "./commands";
-import { TabbyCompletionProvider } from "./TabbyCompletionProvider";
-import { TabbyStatusBarItem } from "./TabbyStatusBarItem";
-import { RecentlyChangedCodeSearch } from "./RecentlyChangedCodeSearch";
+import { Client } from "./lsp/Client";
+import { InlineCompletionProvider } from "./InlineCompletionProvider";
+import { Config } from "./Config";
+import { GitProvider } from "./git/GitProvider";
+import { ContextVariables } from "./ContextVariables";
+import { StatusBarItem } from "./StatusBarItem";
+import { ChatSidePanelProvider } from "./chat/sidePanel";
+import { Commands } from "./commands";
+import { CodeActions } from "./CodeActions";
+import { isBrowser } from "./env";
 
 const logger = getLogger();
+let client: Client | undefined = undefined;
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
 export async function activate(context: ExtensionContext) {
   logger.info("Activating Tabby extension...");
-  const agent = await createAgentInstance(context);
-  const completionProvider = new TabbyCompletionProvider();
-  context.subscriptions.push(languages.registerInlineCompletionItemProvider({ pattern: "**" }, completionProvider));
-
-  const collectSnippetsFromRecentChangedFilesConfig =
-    agent.getConfig().completion.prompt.collectSnippetsFromRecentChangedFiles;
-  if (collectSnippetsFromRecentChangedFilesConfig.enabled) {
-    const recentlyChangedCodeSnippetsIndex = new RecentlyChangedCodeSearch(
-      collectSnippetsFromRecentChangedFilesConfig.indexing,
-    );
-    context.subscriptions.push(
-      workspace.onDidChangeTextDocument((event) => {
-        // Ensure that the changed file is belong to a workspace folder
-        const workspaceFolder = workspace.getWorkspaceFolder(event.document.uri);
-        if (workspaceFolder && workspace.workspaceFolders?.includes(workspaceFolder)) {
-          recentlyChangedCodeSnippetsIndex.handleDidChangeTextDocument(event);
-        }
-      }),
-    );
-    completionProvider.recentlyChangedCodeSearch = recentlyChangedCodeSnippetsIndex;
+  const clientOptions: LanguageClientOptions = {
+    documentSelector: [
+      { scheme: "file" },
+      { scheme: "vscode-vfs" },
+      { scheme: "untitled" },
+      { scheme: "vscode-notebook-cell" },
+      { scheme: "vscode-userdata" },
+    ],
+    outputChannel: logger,
+  };
+  if (isBrowser) {
+    const workerModulePath = Uri.joinPath(context.extensionUri, "dist/tabby-agent/browser/index.mjs");
+    const worker = new Worker(workerModulePath.toString());
+    const languageClient = new BrowserLanguageClient("Tabby", "Tabby", clientOptions, worker);
+    client = new Client(context, languageClient);
+  } else {
+    const serverModulePath = context.asAbsolutePath("dist/tabby-agent/node/index.js");
+    const serverOptions: ServerOptions = {
+      run: {
+        module: serverModulePath,
+        transport: TransportKind.ipc,
+      },
+      debug: {
+        module: serverModulePath,
+        transport: TransportKind.ipc,
+      },
+    };
+    const languageClient = new NodeLanguageClient("Tabby", serverOptions, clientOptions);
+    client = new Client(context, languageClient);
   }
+  const config = new Config(context);
+  const contextVariables = new ContextVariables(client, config);
+  const inlineCompletionProvider = new InlineCompletionProvider(client, config);
+  const gitProvider = new GitProvider();
+  client.registerConfigManager(config);
+  client.registerInlineCompletionProvider(inlineCompletionProvider);
+  client.registerGitProvider(gitProvider);
 
-  const statusBarItem = new TabbyStatusBarItem(context, completionProvider);
-  context.subscriptions.push(statusBarItem.register());
+  // Register chat panel
+  const chatViewProvider = new ChatSidePanelProvider(context, client, contextVariables, gitProvider);
+  context.subscriptions.push(
+    window.registerWebviewViewProvider("tabby.chatView", chatViewProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
 
-  context.subscriptions.push(...tabbyCommands(context, completionProvider, statusBarItem));
+  const statusBarItem = new StatusBarItem(client, config);
+  statusBarItem.registerInContext(context);
 
-  const updateIsChatEnabledContextVariable = () => {
-    if (agent.getStatus() === "ready") {
-      const healthState = agent.getServerHealthState();
-      const isChatEnabled = Boolean(healthState?.chat_model);
-      commands.executeCommand("setContext", "tabby.chatModeEnabled", isChatEnabled);
-    }
-  };
-  agent.on("statusChanged", () => {
-    updateIsChatEnabledContextVariable();
-  });
-  updateIsChatEnabledContextVariable();
+  const commands = new Commands(
+    context,
+    client,
+    config,
+    contextVariables,
+    inlineCompletionProvider,
+    chatViewProvider,
+    gitProvider,
+  );
+  commands.register();
 
-  const updateIsExplainCodeEnabledContextVariable = () => {
-    const experimental = workspace.getConfiguration("tabby").get<Record<string, any>>("experimental", {});
-    const isExplainCodeEnabled = experimental["chat.explainCodeBlock"] || false;
-    commands.executeCommand("setContext", "tabby.explainCodeSettingEnabled", isExplainCodeEnabled);
-  };
-  workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration("tabby.experimental")) {
-      updateIsExplainCodeEnabledContextVariable();
-    }
-  });
-  updateIsExplainCodeEnabledContextVariable();
+  /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */ /* eslint-disable-next-line @typescript-eslint/prefer-ts-expect-error */
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */ // @ts-ignore noUnusedLocals
+  const codeActions = new CodeActions(client, contextVariables);
+
   logger.info("Tabby extension activated.");
+
+  await gitProvider.init();
+
+  logger.info("Launching language server tabby-agent...");
+  await client.start();
+  logger.info("Language server tabby-agent launched.");
 }
 
-// this method is called when your extension is deactivated
 export async function deactivate() {
   logger.info("Deactivating Tabby extension...");
-  await disposeAgentInstance();
+  await client?.stop();
   logger.info("Tabby extension deactivated.");
 }
