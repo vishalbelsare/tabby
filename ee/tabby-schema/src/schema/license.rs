@@ -39,15 +39,7 @@ impl LicenseInfo {
     }
 
     pub fn seat_limits_for_team_license() -> usize {
-        30
-    }
-
-    pub fn check_node_limit(&self, num_nodes: usize) -> bool {
-        match self.r#type {
-            LicenseType::Community => false,
-            LicenseType::Team => num_nodes <= 2,
-            LicenseType::Enterprise => true,
-        }
+        50
     }
 
     pub fn guard_seat_limit(mut self) -> Self {
@@ -88,6 +80,14 @@ impl LicenseInfo {
         }
 
         Ok(())
+    }
+
+    pub fn expire_in_days(&self) -> Option<i64> {
+        self.expires_at.map(|expires_at| {
+            let now = Utc::now();
+            let duration = expires_at.signed_duration_since(now);
+            duration.num_days()
+        })
     }
 }
 

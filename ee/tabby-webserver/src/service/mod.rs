@@ -1,115 +1,166 @@
+mod access_policy;
 mod analytic;
+pub mod answer;
 mod auth;
 pub mod background_job;
+pub mod context;
 mod email;
 pub mod event_logger;
-mod job;
+pub mod integration;
+pub mod job;
 mod license;
-mod proxy;
+mod notification;
+mod preset_web_documents_data;
 pub mod repository;
 mod setting;
+mod thread;
 mod user_event;
-mod worker;
+mod user_group;
+pub mod web_documents;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
+use answer::AnswerService;
+use anyhow::Context;
 use async_trait::async_trait;
+pub use auth::create as new_auth_service;
+#[cfg(test)]
+pub use auth::testutils::FakeAuthService;
 use axum::{
     body::Body,
     http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::IntoResponse,
 };
+pub use email::new_email_service;
 use hyper::{HeaderMap, Uri};
-use hyper_util::{
-    client::legacy::{connect::HttpConnector, Client},
-    rt,
-};
 use juniper::ID;
+pub use license::new_license_service;
+pub use setting::create as new_setting_service;
 use tabby_common::{
     api::{code::CodeSearch, event::EventLogger},
     constants::USER_HEADER_FIELD_NAME,
 };
-use tabby_db::DbConn;
+use tabby_db::{DbConn, UserDAO, UserGroupDAO};
+use tabby_inference::{ChatCompletionStream, CompletionStream, Embedding as EmbeddingService};
 use tabby_schema::{
+    access_policy::AccessPolicyService,
     analytic::AnalyticService,
-    auth::AuthenticationService,
+    auth::{AuthenticationService, UserSecured},
+    context::ContextService,
     email::EmailService,
+    integration::IntegrationService,
+    interface::UserValue,
     is_demo_mode,
     job::JobService,
     license::{IsLicenseValid, LicenseService},
+    notification::NotificationService,
+    policy,
     repository::RepositoryService,
     setting::SettingService,
+    thread::ThreadService,
     user_event::UserEventService,
-    worker::{RegisterWorkerError, Worker, WorkerKind, WorkerService},
+    user_group::{UserGroup, UserGroupMembership, UserGroupService},
+    web_documents::WebDocumentService,
+    worker::WorkerService,
     AsID, AsRowid, CoreError, Result, ServiceLocator,
 };
-use tracing::{info, warn};
 
-use self::{
-    analytic::new_analytic_service, email::new_email_service, license::new_license_service,
-};
+use self::analytic::new_analytic_service;
+use crate::rate_limit::UserRateLimiter;
+
 struct ServerContext {
-    client: Client<HttpConnector, Body>,
-    completion: worker::WorkerGroup,
-    chat: worker::WorkerGroup,
     db_conn: DbConn,
     mail: Arc<dyn EmailService>,
+    embedding: Arc<dyn EmbeddingService>,
+    chat: Option<Arc<dyn ChatCompletionStream>>,
+    completion: Option<Arc<dyn CompletionStream>>,
     auth: Arc<dyn AuthenticationService>,
+    notification: Arc<dyn NotificationService>,
     license: Arc<dyn LicenseService>,
     repository: Arc<dyn RepositoryService>,
+    integration: Arc<dyn IntegrationService>,
     user_event: Arc<dyn UserEventService>,
     job: Arc<dyn JobService>,
+    web_documents: Arc<dyn WebDocumentService>,
+    thread: Arc<dyn ThreadService>,
+    context: Arc<dyn ContextService>,
+    user_group: Arc<dyn UserGroupService>,
+    access_policy: Arc<dyn AccessPolicyService>,
 
     logger: Arc<dyn EventLogger>,
     code: Arc<dyn CodeSearch>,
 
     setting: Arc<dyn SettingService>,
 
-    is_chat_enabled_locally: bool,
+    user_rate_limiter: UserRateLimiter,
 }
 
 impl ServerContext {
     pub async fn new(
         logger: Arc<dyn EventLogger>,
+        auth: Arc<dyn AuthenticationService>,
+        chat: Option<Arc<dyn ChatCompletionStream>>,
+        completion: Option<Arc<dyn CompletionStream>>,
         code: Arc<dyn CodeSearch>,
         repository: Arc<dyn RepositoryService>,
+        integration: Arc<dyn IntegrationService>,
+        job: Arc<dyn JobService>,
+        answer: Option<Arc<AnswerService>>,
+        context: Arc<dyn ContextService>,
+        web_documents: Arc<dyn WebDocumentService>,
+        mail: Arc<dyn EmailService>,
+        license: Arc<dyn LicenseService>,
+        setting: Arc<dyn SettingService>,
         db_conn: DbConn,
-        is_chat_enabled_locally: bool,
+        embedding: Arc<dyn EmbeddingService>,
     ) -> Self {
-        let mail = Arc::new(
-            new_email_service(db_conn.clone())
-                .await
-                .expect("failed to initialize mail service"),
-        );
-        let license = Arc::new(
-            new_license_service(db_conn.clone())
-                .await
-                .expect("failed to initialize license service"),
-        );
         let user_event = Arc::new(user_event::create(db_conn.clone()));
-        let job = Arc::new(job::create(db_conn.clone()).await);
-        let setting = Arc::new(setting::create(db_conn.clone()));
+        let thread = Arc::new(thread::create(
+            db_conn.clone(),
+            answer.clone(),
+            Some(auth.clone()),
+        ));
+        let user_group = Arc::new(user_group::create(db_conn.clone()));
+        let access_policy = Arc::new(access_policy::create(db_conn.clone(), context.clone()));
+        let notification = Arc::new(notification::create(db_conn.clone()));
+
+        background_job::start(
+            db_conn.clone(),
+            job.clone(),
+            repository.git(),
+            repository.third_party(),
+            integration.clone(),
+            repository.clone(),
+            context.clone(),
+            license.clone(),
+            notification.clone(),
+            embedding.clone(),
+        )
+        .await;
+
         Self {
-            client: Client::builder(rt::TokioExecutor::new()).build(HttpConnector::new()),
-            completion: worker::WorkerGroup::default(),
-            chat: worker::WorkerGroup::default(),
-            mail: mail.clone(),
-            auth: Arc::new(auth::create(
-                db_conn.clone(),
-                mail,
-                license.clone(),
-                setting.clone(),
-            )),
+            mail,
+            embedding,
+            chat,
+            completion,
+            auth,
+            web_documents,
+            thread,
+            context,
             license,
             repository,
+            integration,
             user_event,
             job,
             logger,
             code,
             setting,
+            user_group,
+            access_policy,
+            notification,
             db_conn,
-            is_chat_enabled_locally,
+            user_rate_limiter: UserRateLimiter::default(),
         }
     }
 
@@ -162,51 +213,6 @@ impl WorkerService for ServerContext {
         Ok(self.db_conn.reset_registration_token().await?)
     }
 
-    async fn list(&self) -> Vec<Worker> {
-        [self.completion.list().await, self.chat.list().await].concat()
-    }
-
-    async fn register(&self, worker: Worker) -> Result<Worker, RegisterWorkerError> {
-        let worker_group = match worker.kind {
-            WorkerKind::Completion => &self.completion,
-            WorkerKind::Chat => &self.chat,
-        };
-
-        let count_workers = worker_group.list().await.len();
-        let license = self
-            .license
-            .read()
-            .await
-            .map_err(|_| RegisterWorkerError::RequiresTeamOrEnterpriseLicense)?;
-
-        if !license.check_node_limit(count_workers + 1) {
-            return Err(RegisterWorkerError::RequiresTeamOrEnterpriseLicense);
-        }
-
-        let worker = worker_group.register(worker).await;
-        info!(
-            "registering <{:?}> worker running at {}",
-            worker.kind, worker.addr
-        );
-        Ok(worker)
-    }
-
-    async fn unregister(&self, worker_addr: &str) {
-        let kind = if self.chat.unregister(worker_addr).await {
-            WorkerKind::Chat
-        } else if self.completion.unregister(worker_addr).await {
-            WorkerKind::Completion
-        } else {
-            warn!(
-                "Trying to unregister a worker missing in registry {}",
-                worker_addr
-            );
-            return;
-        };
-
-        info!("unregistering <{:?}> worker at {}", kind, worker_addr);
-    }
-
     async fn dispatch_request(
         &self,
         mut request: Request<Body>,
@@ -215,58 +221,52 @@ impl WorkerService for ServerContext {
         let (auth, user) = self
             .authorize_request(request.uri(), request.headers())
             .await;
+        let unauthorized = axum::response::Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body(Body::empty())
+            .unwrap()
+            .into_response();
         if !auth {
-            return axum::response::Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body(Body::empty())
-                .unwrap()
-                .into_response();
+            return unauthorized;
         }
 
         if let Some(user) = user {
+            // Apply rate limiting when `user` is not none.
+            if !self
+                .user_rate_limiter
+                .is_allowed(request.uri(), &user)
+                .await
+            {
+                return axum::response::Response::builder()
+                    .status(StatusCode::TOO_MANY_REQUESTS)
+                    .body(Body::empty())
+                    .unwrap()
+                    .into_response();
+            }
+
             request.headers_mut().append(
                 HeaderName::from_static(USER_HEADER_FIELD_NAME),
                 HeaderValue::from_str(&user).expect("User must be valid header"),
             );
+
+            let Ok(user) = self.auth.get_user(&user).await else {
+                return unauthorized;
+            };
+
+            let Ok(context_info) = self.context.read(Some(&user.policy)).await else {
+                return unauthorized;
+            };
+
+            request
+                .extensions_mut()
+                .insert(context_info.allowed_code_repository());
         }
 
-        let remote_addr = request
-            .extensions()
-            .get::<axum::extract::ConnectInfo<SocketAddr>>()
-            .map(|ci| ci.0)
-            .expect("Unable to extract remote addr");
-
-        let path = request.uri().path();
-        let worker = if path.starts_with("/v1/completions") {
-            self.completion.select().await
-        } else if path.starts_with("/v1/chat/completions")
-            || path.starts_with("/v1beta/chat/completions")
-        {
-            self.chat.select().await
-        } else {
-            None
-        };
-
-        if let Some(worker) = worker {
-            match proxy::call(self.client.clone(), remote_addr.ip(), &worker, request).await {
-                Ok(res) => res.into_response(),
-                Err(err) => {
-                    warn!("Failed to proxy request {}", err);
-                    axum::response::Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Body::empty())
-                        .unwrap()
-                        .into_response()
-                }
-            }
-        } else {
-            next.run(request).await
-        }
+        next.run(request).await
     }
 
     async fn is_chat_enabled(&self) -> Result<bool> {
-        let num_chat_workers = self.chat.list().await.len();
-        Ok(num_chat_workers > 0 || self.is_chat_enabled_locally)
+        Ok(self.chat.is_some())
     }
 }
 
@@ -283,6 +283,10 @@ impl ServiceLocator for ArcServerContext {
         self.0.auth.clone()
     }
 
+    fn chat(&self) -> Option<Arc<dyn ChatCompletionStream>> {
+        self.0.chat.clone()
+    }
+
     fn worker(&self) -> Arc<dyn WorkerService> {
         self.0.clone()
     }
@@ -291,8 +295,16 @@ impl ServiceLocator for ArcServerContext {
         self.0.code.clone()
     }
 
+    fn completion(&self) -> Option<Arc<dyn CompletionStream>> {
+        self.0.completion.clone()
+    }
+
     fn logger(&self) -> Arc<dyn EventLogger> {
         self.0.logger.clone()
+    }
+
+    fn notification(&self) -> Arc<dyn tabby_schema::notification::NotificationService> {
+        self.0.notification.clone()
     }
 
     fn job(&self) -> Arc<dyn JobService> {
@@ -305,6 +317,10 @@ impl ServiceLocator for ArcServerContext {
 
     fn email(&self) -> Arc<dyn EmailService> {
         self.0.mail.clone()
+    }
+
+    fn embedding(&self) -> Arc<dyn EmbeddingService> {
+        self.0.embedding.clone()
     }
 
     fn setting(&self) -> Arc<dyn SettingService> {
@@ -322,17 +338,70 @@ impl ServiceLocator for ArcServerContext {
     fn user_event(&self) -> Arc<dyn UserEventService> {
         self.0.user_event.clone()
     }
+
+    fn integration(&self) -> Arc<dyn IntegrationService> {
+        self.0.integration.clone()
+    }
+
+    fn web_documents(&self) -> Arc<dyn WebDocumentService> {
+        self.0.web_documents.clone()
+    }
+
+    fn thread(&self) -> Arc<dyn ThreadService> {
+        self.0.thread.clone()
+    }
+
+    fn context(&self) -> Arc<dyn ContextService> {
+        self.0.context.clone()
+    }
+
+    fn user_group(&self) -> Arc<dyn UserGroupService> {
+        self.0.user_group.clone()
+    }
+
+    fn access_policy(&self) -> Arc<dyn AccessPolicyService> {
+        self.0.access_policy.clone()
+    }
 }
 
 pub async fn create_service_locator(
     logger: Arc<dyn EventLogger>,
+    auth: Arc<dyn AuthenticationService>,
+    chat: Option<Arc<dyn ChatCompletionStream>>,
+    completion: Option<Arc<dyn CompletionStream>>,
     code: Arc<dyn CodeSearch>,
     repository: Arc<dyn RepositoryService>,
+    integration: Arc<dyn IntegrationService>,
+    job: Arc<dyn JobService>,
+    answer: Option<Arc<AnswerService>>,
+    context: Arc<dyn ContextService>,
+    web_documents: Arc<dyn WebDocumentService>,
+    mail: Arc<dyn EmailService>,
+    license: Arc<dyn LicenseService>,
+    setting: Arc<dyn SettingService>,
     db: DbConn,
-    is_chat_enabled: bool,
+    embedding: Arc<dyn EmbeddingService>,
 ) -> Arc<dyn ServiceLocator> {
     Arc::new(ArcServerContext::new(
-        ServerContext::new(logger, code, repository, db, is_chat_enabled).await,
+        ServerContext::new(
+            logger,
+            auth,
+            chat,
+            completion,
+            code,
+            repository,
+            integration,
+            job,
+            answer,
+            context,
+            web_documents,
+            mail,
+            license,
+            setting,
+            db,
+            embedding,
+        )
+        .await,
     ))
 }
 
@@ -359,5 +428,81 @@ pub fn graphql_pagination_to_filter(
             Ok((Some(last), before, true))
         }
         _ => Ok((None, None, false)),
+    }
+}
+
+pub async fn create_gitlab_client(
+    api_base: &str,
+    access_token: &str,
+) -> Result<gitlab::AsyncGitlab, anyhow::Error> {
+    let url = url::Url::parse(api_base)?;
+    let api_base = url.authority();
+    let mut builder = gitlab::Gitlab::builder(api_base.to_owned(), access_token);
+    if url.scheme() == "http" {
+        builder.insecure();
+    };
+    Ok(builder.build_async().await?)
+}
+
+trait UserSecuredExt {
+    fn new(db: DbConn, val: UserDAO) -> tabby_schema::auth::UserSecured;
+}
+
+impl UserSecuredExt for tabby_schema::auth::UserSecured {
+    fn new(db: DbConn, val: UserDAO) -> tabby_schema::auth::UserSecured {
+        let is_owner = val.is_owner();
+        let id = val.id.as_id();
+        tabby_schema::auth::UserSecured {
+            policy: policy::AccessPolicy::new(db, &id, val.is_admin),
+            id,
+            email: val.email,
+            name: val.name.unwrap_or_default(),
+            is_owner,
+            is_admin: val.is_admin,
+            auth_token: val.auth_token,
+            created_at: val.created_at,
+            active: val.active,
+            is_password_set: val.password_encrypted.is_some(),
+
+            // when a user created by registration, password_encrypted is set
+            // when a user created by SSO, password_encrypted is not set
+            // so, we can determine if a user is SSO user by checking if password_encrypted is set
+            is_sso_user: val.password_encrypted.is_none(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+trait UserGroupExt {
+    async fn new(db: DbConn, val: UserGroupDAO) -> Result<UserGroup>;
+}
+
+#[async_trait::async_trait]
+impl UserGroupExt for UserGroup {
+    async fn new(db: DbConn, val: UserGroupDAO) -> Result<UserGroup> {
+        let mut members = Vec::new();
+        for x in db.list_user_group_memberships(val.id, None).await? {
+            members.push(UserGroupMembership {
+                is_group_admin: x.is_group_admin,
+                created_at: x.created_at,
+                updated_at: x.updated_at,
+                user: UserValue::UserSecured(UserSecured::new(
+                    db.clone(),
+                    db.get_user(x.user_id)
+                        .await?
+                        .context("User doesn't exists")?,
+                )),
+            });
+        }
+
+        members.sort_by_key(|x| (!x.is_group_admin, x.updated_at));
+
+        Ok(UserGroup {
+            id: val.id.as_id(),
+            name: val.name,
+            created_at: val.created_at,
+            updated_at: val.updated_at,
+            members,
+        })
     }
 }

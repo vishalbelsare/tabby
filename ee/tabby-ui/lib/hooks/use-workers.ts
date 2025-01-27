@@ -1,15 +1,12 @@
 import React from 'react'
-import { findIndex, groupBy, slice } from 'lodash-es'
-import { useQuery } from 'urql'
+import { groupBy } from 'lodash-es'
 
-import { graphql } from '@/lib/gql/generates'
-import { Worker, WorkerKind } from '@/lib/gql/generates/graphql'
-
+import { ModelHealthBackend } from '../gql/generates/graphql'
 import { useHealth, type HealthInfo } from './use-health'
 
-function transformHealthInfoToCompletionWorker(healthInfo: HealthInfo): Worker {
+function transformHealthInfoToCompletionWorker(healthInfo: HealthInfo) {
   return {
-    kind: WorkerKind.Completion,
+    kind: ModelHealthBackend.Completion,
     device: healthInfo.device,
     addr: 'localhost',
     arch: '',
@@ -20,9 +17,9 @@ function transformHealthInfoToCompletionWorker(healthInfo: HealthInfo): Worker {
   }
 }
 
-function transformHealthInfoToChatWorker(healthInfo: HealthInfo): Worker {
+function transformHealthInfoToChatWorker(healthInfo: HealthInfo) {
   return {
-    kind: WorkerKind.Chat,
+    kind: ModelHealthBackend.Chat,
     device: healthInfo.chat_device!,
     addr: 'localhost',
     arch: '',
@@ -33,43 +30,22 @@ function transformHealthInfoToChatWorker(healthInfo: HealthInfo): Worker {
   }
 }
 
-export const getAllWorkersDocument = graphql(/* GraphQL */ `
-  query GetWorkers {
-    workers {
-      kind
-      name
-      addr
-      device
-      arch
-      cpuInfo
-      cpuCount
-      cudaDevices
-    }
-  }
-`)
-
 function useWorkers() {
-  const { data: healthInfo } = useHealth()
-  const [{ data, fetching }] = useQuery({ query: getAllWorkersDocument })
-  let workers = data?.workers
+  const { data: healthInfo, isLoading, error } = useHealth()
 
   const groupedWorkers = React.useMemo(() => {
-    const _workers = slice(workers)
-    const haveRemoteCompletionWorkers =
-      findIndex(_workers, { kind: WorkerKind.Completion }) > -1
-    const haveRemoteChatWorkers =
-      findIndex(_workers, { kind: WorkerKind.Chat }) > -1
+    const workers = []
 
-    if (!haveRemoteCompletionWorkers && healthInfo?.model) {
-      _workers.push(transformHealthInfoToCompletionWorker(healthInfo))
+    if (healthInfo?.model) {
+      workers.push(transformHealthInfoToCompletionWorker(healthInfo))
     }
-    if (!haveRemoteChatWorkers && healthInfo?.chat_model) {
-      _workers.push(transformHealthInfoToChatWorker(healthInfo))
+    if (healthInfo?.chat_model) {
+      workers.push(transformHealthInfoToChatWorker(healthInfo))
     }
-    return groupBy(_workers, 'kind')
-  }, [healthInfo, workers])
+    return groupBy(workers, 'kind')
+  }, [healthInfo])
 
-  return { data: groupedWorkers, fetching }
+  return { data: groupedWorkers, isLoading, error }
 }
 
 export { useWorkers }

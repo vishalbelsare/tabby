@@ -1,8 +1,51 @@
 'use client'
 
 import * as React from 'react'
+import { LetterCaseCapitalizeIcon } from '@radix-ui/react-icons'
 // FIXME(wwayne): Review each icons and consider re-export from `lucide-react`.
-import { BookOpenText, ChevronsDownUp, GitFork, Mail, Star } from 'lucide-react'
+import {
+  AlignJustify,
+  AtSign,
+  Bell,
+  Blocks,
+  BookOpenText,
+  Box,
+  Bug,
+  CaseSensitive,
+  ChevronsDownUp,
+  CircleAlert,
+  CircleDot,
+  CircleHelp,
+  CirclePlay,
+  Eye,
+  EyeOff,
+  Files,
+  FileSearch2,
+  FileText,
+  Filter,
+  GitFork,
+  GitMerge,
+  GitPullRequest,
+  Globe,
+  Hash,
+  IndentIncrease,
+  Layers2,
+  Link,
+  ListFilter,
+  Mail,
+  MessagesSquare,
+  PanelLeft,
+  Regex,
+  Search,
+  Share2,
+  Sparkles,
+  SquareActivity,
+  SquareChevronRight,
+  Star,
+  Tag,
+  WrapText,
+  X
+} from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -487,18 +530,11 @@ function IconEdit({ className, ...props }: React.ComponentProps<'svg'>) {
   )
 }
 
-function IconShare({ className, ...props }: React.ComponentProps<'svg'>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="currentColor"
-      className={cn('h-4 w-4', className)}
-      viewBox="0 0 256 256"
-      {...props}
-    >
-      <path d="m237.66 106.35-80-80A8 8 0 0 0 144 32v40.35c-25.94 2.22-54.59 14.92-78.16 34.91-28.38 24.08-46.05 55.11-49.76 87.37a12 12 0 0 0 20.68 9.58c11-11.71 50.14-48.74 107.24-52V192a8 8 0 0 0 13.66 5.65l80-80a8 8 0 0 0 0-11.3ZM160 172.69V144a8 8 0 0 0-8-8c-28.08 0-55.43 7.33-81.29 21.8a196.17 196.17 0 0 0-36.57 26.52c5.8-23.84 20.42-46.51 42.05-64.86C99.41 99.77 127.75 88 152 88a8 8 0 0 0 8-8V51.32L220.69 112Z" />
-    </svg>
-  )
+function IconShare({
+  className,
+  ...props
+}: React.ComponentProps<typeof Share2>) {
+  return <Share2 className={cn('h-4 w-4', className)} {...props} />
 }
 
 function IconUsers({ className, ...props }: React.ComponentProps<'svg'>) {
@@ -1371,11 +1407,11 @@ const IconBookOpenText = ({
   className,
   ...props
 }: React.ComponentProps<typeof BookOpenText>) => (
-  <BookOpenText className={cn('h4 w-4', className)} {...props} />
+  <BookOpenText className={cn('h-4 w-4', className)} {...props} />
 )
 
 function IconMail({ className, ...props }: React.ComponentProps<typeof Mail>) {
-  return <Mail className={cn('h4 w-4', className)} {...props} />
+  return <Mail className={cn('h-4 w-4', className)} {...props} />
 }
 
 function IconChevronsDownUp({
@@ -1404,15 +1440,315 @@ const IconStar = ({
   className,
   ...props
 }: React.ComponentProps<typeof Star>) => (
-  <Star className={cn('h4 w-4', className)} {...props} />
+  <Star className={cn('h-4 w-4', className)} {...props} />
 )
 
 const IconGitFork = ({
   className,
   ...props
 }: React.ComponentProps<typeof GitFork>) => (
-  <GitFork className={cn('h4 w-4', className)} {...props} />
+  <GitFork className={cn('h-4 w-4', className)} {...props} />
 )
+
+function IconBlocks({
+  className,
+  ...props
+}: React.ComponentProps<typeof Blocks>) {
+  return <Blocks className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconVSCode({ className, ...props }: React.ComponentProps<'svg'>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('h-4 w-4', className)}
+      viewBox="0 0 1024 1024"
+      fill="currentColor"
+      {...props}
+    >
+      <path d="M746.222933 102.239573l-359.799466 330.820267L185.347413 281.4976 102.2464 329.864533l198.20544 182.132054-198.20544 182.132053 83.101013 48.510293 201.076054-151.558826 359.799466 330.676906 175.527254-85.251413V187.4944z m0 217.57952v384.341334l-255.040853-192.177494z" />
+    </svg>
+  )
+}
+
+function IconJetBrains({ className, ...props }: React.ComponentProps<'svg'>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('h-4 w-4', className)}
+      viewBox="0 0 1024 1024"
+      fill="currentColor"
+      {...props}
+    >
+      <path d="M64 960h896V64H64z" />
+      <path
+        d="M161.51 848.32h336V792h-336zM197.4 318.72a53 53 0 0 0 38.4-14.08 51.76 51.76 0 0 0 12.8-39V176h-38.4v89.6c0 12.8-6.4 19.2-16 19.2-9-0.64-17.28-5.12-21.76-12.8l-25 23.68a57.67 57.67 0 0 0 49.96 23.04zM303.36 230.4v-21.76h74.88V176H265.6v139.52h113.28v-33.28h-74.24v-22.4h65.92V230.4zM433.09 316.16h39V209.92h42.24V176H391.49v33.92h41.6zM228.88 371.22a55.87 55.87 0 0 1 38.4 12.8 32 32 0 0 1 9 22.4c0 14.08-8.32 26.88-21.76 31.36 16.64 3.2 28.16 17.28 27.52 33.92 0 24.28-19.2 39-52.48 39H163V371.22zM220 402.54h-19.2v24.32h18.56c11.381 0 18.39-3.748 18.557-11.861l0.003-0.299c-0.01-7.7-6.41-12.16-17.92-12.16z m-19.2 51.67v25.6h24.32c11.52 0 18.56-4.48 18.56-12.8 0-7-6.4-12.8-19.2-12.8h-23.69 0.01zM356.91 371.19a64.87 64.87 0 0 1 44.8 15.36c8.96 8.32 13.44 19.84 13.44 32.64 0.64 18.56-11.52 35.81-28.8 42.88l33.28 48.64h-44.8l-28.16-42.24h-12.8v42.24h-38.4V371.19z m-1.6 34.04h-21.76v33.92l21.76-0.64c12.8 0 20.48-6.4 20.48-16.64 0-10.88-7.68-16.64-20.48-16.64z"
+        fill="#FFFFFF"
+      />
+      <path
+        d="M505.9 370.13l59.52 140.8h-41.6l-9.6-25h-54.4l-10.24 25h-40.32l59.52-140.8h37.12z m-18.22 46l-16 39.68h30.72l-14.72-39.68zM571.14 511h39V370.88h-39zM715.78 511h33.92V370.88h-38.4v74.88l-50.56-74.88H624.9V511h38.4v-76.8zM816.47 401.36c14.08 0 27.52 5.12 39 13.44l18.56-27.52a88.83 88.83 0 0 0-57.6-18.56c-33.28 0-53.76 19.2-53.76 44.8 0 28.8 22.4 37.12 52.48 43.52 19.2 5.12 23.68 7.68 23.68 14.08 0 5.76-5.76 9.6-16 9.6-16.64-0.64-32.64-6.4-44.8-16.64l-21.76 25.6c18.56 14.72 41.6 23 64.64 22.4 34.56 0 57-16.64 57-44.8 0-26.24-19.2-36.48-51.2-43.52-19.84-4.48-24.32-7-24.32-13.44 0-5.12 4.48-8.96 14.08-8.96z"
+        fill="#FFFFFF"
+      />
+    </svg>
+  )
+}
+
+function IconLayers({
+  className,
+  ...props
+}: React.ComponentProps<typeof Layers2>) {
+  return <Layers2 className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconSparkles({
+  className,
+  ...props
+}: React.ComponentProps<typeof Sparkles>) {
+  return <Sparkles className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconSearch({
+  className,
+  ...props
+}: React.ComponentProps<typeof Search>) {
+  return <Search className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconCirclePlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof CirclePlay>) {
+  return <CirclePlay className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconBox({ className, ...props }: React.ComponentProps<typeof Box>) {
+  return <Box className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconTag({ className, ...props }: React.ComponentProps<typeof Tag>) {
+  return <Tag className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconFileText({
+  className,
+  ...props
+}: React.ComponentProps<typeof FileText>) {
+  return <FileText className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconApplyInEditor({
+  className,
+  ...props
+}: React.ComponentProps<typeof IndentIncrease>) {
+  return <IndentIncrease className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconSmartApplyInEditor({
+  className,
+  ...props
+}: React.ComponentProps<typeof Sparkles>) {
+  return <Sparkles className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconBug({ className, ...props }: React.ComponentProps<typeof Bug>) {
+  return <Bug className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconFilter({
+  className,
+  ...props
+}: React.ComponentProps<typeof Filter>) {
+  return <Filter className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconRemove({ className, ...props }: React.ComponentProps<typeof X>) {
+  return <X className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconLink({ className, ...props }: React.ComponentProps<typeof Link>) {
+  return <Link className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconListFilter({
+  className,
+  ...props
+}: React.ComponentProps<typeof ListFilter>) {
+  return <ListFilter className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconAtSign({
+  className,
+  ...props
+}: React.ComponentProps<typeof AtSign>) {
+  return <AtSign className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconGlobe({
+  className,
+  ...props
+}: React.ComponentProps<typeof Globe>) {
+  return <Globe className={cn('h-4 w-4', className)} {...props} />
+}
+
+function Emoji({
+  emoji,
+  className,
+  ...props
+}: React.ComponentProps<'span'> & { emoji: string }) {
+  return (
+    <span
+      className={cn(
+        'flex h-full w-full items-center justify-center text-lg leading-none',
+        className
+      )}
+      {...props}
+    >
+      {emoji}
+    </span>
+  )
+}
+
+function IconEmojiBook({ className, ...props }: React.ComponentProps<'span'>) {
+  return (
+    <span className={cn('h-4 w-4 pt-0.5', className)} {...props}>
+      <Emoji emoji="📚" />
+    </span>
+  )
+}
+
+function IconEmojiGlobe({ className, ...props }: React.ComponentProps<'span'>) {
+  return (
+    <span className={cn('h-4 w-4', className)} {...props}>
+      <Emoji emoji="🌐" />
+    </span>
+  )
+}
+
+function IconWrapText({
+  className,
+  ...props
+}: React.ComponentProps<typeof WrapText>) {
+  return <WrapText className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconAlignJustify({
+  className,
+  ...props
+}: React.ComponentProps<typeof AlignJustify>) {
+  return <AlignJustify className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconHash({ className, ...props }: React.ComponentProps<typeof Hash>) {
+  return <Hash className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconFiles({
+  className,
+  ...props
+}: React.ComponentProps<typeof MessagesSquare>) {
+  return <Files className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconRegex({
+  className,
+  ...props
+}: React.ComponentProps<typeof Regex>) {
+  return <Regex className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconLetterCaseCapitalize({
+  className,
+  ...props
+}: React.ComponentProps<typeof LetterCaseCapitalizeIcon>) {
+  return (
+    <LetterCaseCapitalizeIcon className={cn('h-4 w-4', className)} {...props} />
+  )
+}
+
+function IconCaseSensitive({
+  className,
+  ...props
+}: React.ComponentProps<typeof CaseSensitive>) {
+  return <CaseSensitive className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconSquareActivity({
+  className,
+  ...props
+}: React.ComponentProps<typeof SquareActivity>) {
+  return <SquareActivity className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconCircleAlert({
+  className,
+  ...props
+}: React.ComponentProps<typeof CircleAlert>) {
+  return <CircleAlert className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconCircleHelp({
+  className,
+  ...props
+}: React.ComponentProps<typeof CircleHelp>) {
+  return <CircleHelp className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconPanelLeft({
+  className,
+  ...props
+}: React.ComponentProps<typeof PanelLeft>) {
+  return <PanelLeft className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconEye({ className, ...props }: React.ComponentProps<typeof Eye>) {
+  return <Eye className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconEyeOff({
+  className,
+  ...props
+}: React.ComponentProps<typeof EyeOff>) {
+  return <EyeOff className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconCircleDot({
+  className,
+  ...props
+}: React.ComponentProps<typeof CircleDot>) {
+  return <CircleDot className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconGitPullRequest({
+  className,
+  ...props
+}: React.ComponentProps<typeof GitPullRequest>) {
+  return <GitPullRequest className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconGitMerge({
+  className,
+  ...props
+}: React.ComponentProps<typeof GitMerge>) {
+  return <GitMerge className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconSquareChevronRight({
+  className,
+  ...props
+}: React.ComponentProps<typeof SquareChevronRight>) {
+  return <SquareChevronRight className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconFileSearch2({
+  className,
+  ...props
+}: React.ComponentProps<typeof FileSearch2>) {
+  return <FileSearch2 className={cn('h-4 w-4', className)} {...props} />
+}
+
+function IconBell({ className, ...props }: React.ComponentProps<typeof Bell>) {
+  return <Bell className={cn('h-4 w-4', className)} {...props} />
+}
 
 export {
   IconEdit,
@@ -1487,5 +1823,45 @@ export {
   IconMail,
   IconChevronsDownUp,
   IconStar,
-  IconGitFork
+  IconGitFork,
+  IconBlocks,
+  IconVSCode,
+  IconJetBrains,
+  IconLayers,
+  IconSparkles,
+  IconSearch,
+  IconCirclePlay,
+  IconBox,
+  IconTag,
+  IconFileText,
+  IconApplyInEditor,
+  IconSmartApplyInEditor,
+  IconBug,
+  IconFilter,
+  IconRemove,
+  IconLink,
+  IconListFilter,
+  IconAtSign,
+  IconGlobe,
+  IconEmojiBook,
+  IconEmojiGlobe,
+  IconWrapText,
+  IconAlignJustify,
+  IconHash,
+  IconFiles,
+  IconLetterCaseCapitalize,
+  IconCaseSensitive,
+  IconRegex,
+  IconSquareActivity,
+  IconCircleAlert,
+  IconCircleHelp,
+  IconPanelLeft,
+  IconEye,
+  IconEyeOff,
+  IconCircleDot,
+  IconGitPullRequest,
+  IconGitMerge,
+  IconSquareChevronRight,
+  IconFileSearch2,
+  IconBell
 }

@@ -1,62 +1,99 @@
-import type { Plugin } from "esbuild";
-import { defineConfig } from "tsup";
+import { defineConfig, Options } from "tsup";
+import fs from "fs-extra";
+import path from "path";
+import { getInstalledPath } from "get-installed-path";
 import { copy } from "esbuild-plugin-copy";
 import { polyfillNode } from "esbuild-plugin-polyfill-node";
-import { dependencies } from "./package.json";
+import dedent from "dedent";
 
-function handleWinCaNativeBinaries(): Plugin {
-  return {
-    name: "handleWinCaNativeBinaries",
-    setup: (build) => {
-      build.onLoad({ filter: /win-ca\/lib\/crypt32-\w*.node$/ }, async (args) => {
-        // As win-ca fallback is used, skip not required `.node` binaries
-        return {
-          contents: "",
-          loader: "empty",
-        };
-      });
+const banner = dedent`
+  /**
+   * Tabby VSCode Extension
+   * https://github.com/tabbyml/tabby/tree/main/clients/vscode
+   * Copyright (c) 2023-2024 TabbyML, Inc.
+   * Licensed under the Apache License 2.0.
+   */`;
+
+export default defineConfig(async (options: Options): Promise<Options[]> => {
+  const tabbyAgentDist = path
+    .join(await getInstalledPath("tabby-agent", { local: true }), "dist")
+    .replaceAll(path.sep, path.posix.sep);
+  const copyTabbyAgentTask: Options = {
+    name: "copy-tabby-agent",
+    entry: ["scripts/dummy.js"],
+    clean: true,
+    esbuildPlugins: [
+      copy({
+        assets: { from: `${tabbyAgentDist}/**`, to: path.join("dist", "tabby-agent") },
+        resolveFrom: "cwd",
+      }),
+    ],
+    onSuccess: async () => {
+      await fs.remove(path.join(__dirname, "dist/dummy.js"));
     },
   };
-}
-
-export default () => [
-  defineConfig({
+  const buildNodeTask: Options = {
     name: "node",
     entry: ["src/extension.ts"],
     outDir: "dist/node",
     platform: "node",
     target: "node18",
-    external: ["vscode"],
-    noExternal: Object.keys(dependencies),
-    esbuildPlugins: [
-      copy({
-        assets: [
-          {
-            from: "../tabby-agent/dist/wasm/*",
-            to: "./wasm",
-          },
-          {
-            from: "../tabby-agent/dist/win-ca/*",
-            to: "./win-ca",
-          },
-        ],
-      }),
-      handleWinCaNativeBinaries(),
-    ],
-    clean: true,
-  }),
-  defineConfig({
+    sourcemap: true,
+    loader: {
+      ".html": "text",
+    },
+    define: {
+      "process.env.IS_BROWSER": "false",
+    },
+    treeshake: {
+      preset: "smallest",
+      moduleSideEffects: "no-external",
+    },
+    external: ["vscode", "vscode-languageserver/browser"],
+    banner: {
+      js: banner,
+    },
+    onSuccess: options.env?.["LAUNCH_ON_SUCCESS"]
+      ? `code --extensionDevelopmentPath=${__dirname} --disable-extensions`
+      : undefined,
+  };
+  const buildBrowserTask: Options = {
     name: "browser",
     entry: ["src/extension.ts"],
-    outDir: "dist/web",
+    outDir: "dist/browser",
     platform: "browser",
-    external: ["vscode"],
-    noExternal: Object.keys(dependencies),
+    sourcemap: true,
+    loader: {
+      ".html": "text",
+    },
+    define: {
+      "process.env.IS_BROWSER": "true",
+    },
+    treeshake: {
+      preset: "smallest",
+      moduleSideEffects: "no-external",
+    },
+    external: ["vscode", "vscode-languageserver/node"],
     esbuildPlugins: [
       polyfillNode({
-        polyfills: { fs: true },
+        polyfills: {},
       }),
     ],
-    clean: true,
-  }),
-];
+    banner: {
+      js: banner,
+    },
+    onSuccess: options.env?.["LAUNCH_ON_SUCCESS"]
+      ? `vscode-test-web --extensionDevelopmentPath=${__dirname} --browserType=chromium --port=3000`
+      : undefined,
+  };
+
+  if (!options.platform) {
+    return [copyTabbyAgentTask, buildNodeTask, buildBrowserTask];
+  } else if (options.platform == "node") {
+    return [copyTabbyAgentTask, buildNodeTask];
+  } else if (options.platform == "browser") {
+    return [copyTabbyAgentTask, buildBrowserTask];
+  } else {
+    throw new Error("Invalid platform.");
+  }
+});

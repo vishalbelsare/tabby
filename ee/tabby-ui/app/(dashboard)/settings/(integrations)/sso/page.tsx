@@ -1,11 +1,5 @@
-import { Metadata } from 'next'
+import { CredentialList } from './components/credential-list'
 
-import { OauthCredentialList } from './components/oauth-credential-list'
-
-export const metadata: Metadata = {
-  title: 'SSO'
-}
-
-export default function IndexPage() {
-  return <OauthCredentialList />
+export default function CredentialPage() {
+  return <CredentialList />
 }

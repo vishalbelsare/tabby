@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_stream::stream;
 use derive_builder::Builder;
 use futures::StreamExt;
-use tabby_common::languages::Language;
+use tabby_common::{config::ModelConfig, languages::Language};
 
 use crate::{decoding::StopConditionFactory, CompletionOptionsBuilder, CompletionStream};
 
@@ -25,16 +25,26 @@ pub struct CodeGenerationOptions {
     pub language: Option<&'static Language>,
 }
 
+/// CodeGeneration utilizes the CompletionStream to generate code completions.
+/// It employs the StopConditionFactory to maintain a list of stop conditions by language, then
+/// reads and decodes the stream, ceasing code generation when a stop condition is met.
 pub struct CodeGeneration {
     imp: Arc<dyn CompletionStream>,
     stop_condition_factory: StopConditionFactory,
 }
 
 impl CodeGeneration {
-    pub fn new(imp: Arc<dyn CompletionStream>) -> Self {
+    pub fn new(imp: Arc<dyn CompletionStream>, config: Option<ModelConfig>) -> Self {
+        let additional_stop_words = match config {
+            Some(ModelConfig::Local(config)) => config.additional_stop_words.unwrap_or_default(),
+            Some(ModelConfig::Http(config)) => config.additional_stop_words.unwrap_or_default(),
+            _ => vec![],
+        };
+        let stop_condition_factory = StopConditionFactory::with_stop_words(additional_stop_words);
+
         Self {
             imp,
-            stop_condition_factory: StopConditionFactory::default(),
+            stop_condition_factory,
         }
     }
 }
@@ -70,10 +80,6 @@ impl CodeGeneration {
             yield text;
         };
 
-        if let Some(text) = Box::pin(s).into_future().await.0 {
-            text
-        } else {
-            String::new()
-        }
+        Box::pin(s).into_future().await.0.unwrap_or_default()
     }
 }

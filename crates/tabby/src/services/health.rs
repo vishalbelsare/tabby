@@ -3,7 +3,8 @@ use std::env::consts::ARCH;
 use anyhow::Result;
 use nvml_wrapper::Nvml;
 use serde::{Deserialize, Serialize};
-use sysinfo::{CpuExt, System, SystemExt};
+use sysinfo::System;
+use tabby_common::config::{ModelConfig, ModelConfigGroup};
 use utoipa::ToSchema;
 
 use crate::Device;
@@ -27,37 +28,18 @@ pub struct HealthState {
 
 impl HealthState {
     pub fn new(
-        model: Option<&str>,
+        model_config: &ModelConfigGroup,
         device: &Device,
-        chat_model: Option<&str>,
         chat_device: Option<&Device>,
         webserver: Option<bool>,
     ) -> Self {
         let (cpu_info, cpu_count) = read_cpu_info();
 
-        let cuda_devices = match read_cuda_devices() {
-            Ok(s) => s,
-            Err(_) => vec![],
-        };
-
-        let http_model_name = Some("Remote");
-        let is_model_http = device == &Device::ExperimentalHttp;
-        let model = if is_model_http {
-            http_model_name
-        } else {
-            model
-        };
-
-        let is_chat_model_http = chat_device == Some(&Device::ExperimentalHttp);
-        let chat_model = if is_chat_model_http {
-            http_model_name
-        } else {
-            chat_model
-        };
+        let cuda_devices = read_cuda_devices().unwrap_or_default();
 
         Self {
-            model: model.map(|x| x.to_string()),
-            chat_model: chat_model.map(|x| x.to_owned()),
+            model: to_model_name(&model_config.completion),
+            chat_model: to_model_name(&model_config.chat),
             chat_device: chat_device.map(|x| x.to_string()),
             device: device.to_string(),
             arch: ARCH.to_string(),
@@ -70,9 +52,20 @@ impl HealthState {
     }
 }
 
+fn to_model_name(model: &Option<ModelConfig>) -> Option<String> {
+    if let Some(model) = model {
+        match model {
+            ModelConfig::Http(_http) => Some("Remote".to_owned()),
+            ModelConfig::Local(llama) => Some(llama.model_id.clone()),
+        }
+    } else {
+        None
+    }
+}
+
 pub fn read_cpu_info() -> (String, usize) {
     let mut system = System::new_all();
-    system.refresh_cpu();
+    system.refresh_cpu_all();
     let cpus = system.cpus();
     let count = cpus.len();
     let info = if count > 0 {
