@@ -45,6 +45,17 @@ export const listRepositories = graphql(/* GraphQL */ `
           id
           name
           gitUrl
+          sourceId
+          jobInfo {
+            lastJobRun {
+              id
+              job
+              createdAt
+              finishedAt
+              exitCode
+            }
+            command
+          }
         }
         cursor
       }
@@ -80,10 +91,10 @@ export const listJobRuns = graphql(/* GraphQL */ `
           id
           job
           createdAt
+          startedAt
           finishedAt
           exitCode
           stdout
-          stderr
         }
         cursor
       }
@@ -113,7 +124,7 @@ export const listJobs = graphql(/* GraphQL */ `
   }
 `)
 
-export const listUsers = graphql(/* GraphQL */ `
+export const listSecuredUsers = graphql(/* GraphQL */ `
   query ListUsers($after: String, $before: String, $first: Int, $last: Int) {
     users(after: $after, before: $before, first: $first, last: $last) {
       edges {
@@ -124,6 +135,8 @@ export const listUsers = graphql(/* GraphQL */ `
           isOwner
           createdAt
           active
+          name
+          isSsoUser
         }
         cursor
       }
@@ -167,16 +180,18 @@ export const queryDailyStats = graphql(/* GraphQL */ `
   }
 `)
 
-export const listGithubRepositoryProviders = graphql(/* GraphQL */ `
-  query ListGithubRepositoryProviders(
+export const listIntegrations = graphql(/* GraphQL */ `
+  query ListIntegrations(
     $ids: [ID!]
+    $kind: IntegrationKind
     $after: String
     $before: String
     $first: Int
     $last: Int
   ) {
-    githubRepositoryProviders(
+    integrations(
       ids: $ids
+      kind: $kind
       after: $after
       before: $before
       first: $first
@@ -187,6 +202,7 @@ export const listGithubRepositoryProviders = graphql(/* GraphQL */ `
           id
           displayName
           status
+          apiBase
         }
         cursor
       }
@@ -200,54 +216,20 @@ export const listGithubRepositoryProviders = graphql(/* GraphQL */ `
   }
 `)
 
-export const listGithubRepositories = graphql(/* GraphQL */ `
-  query ListGithubRepositories(
-    $providerIds: [ID!]!
+export const listIntegratedRepositories = graphql(/* GraphQL */ `
+  query ListIntegratedRepositories(
+    $ids: [ID!]
+    $kind: IntegrationKind
     $active: Boolean
     $after: String
     $before: String
     $first: Int
     $last: Int
   ) {
-    githubRepositories(
-      providerIds: $providerIds
-      active: $active
-      after: $after
-      before: $before
-      first: $first
-      last: $last
-    ) {
-      edges {
-        node {
-          id
-          vendorId
-          githubRepositoryProviderId
-          name
-          gitUrl
-          active
-        }
-        cursor
-      }
-      pageInfo {
-        hasNextPage
-        hasPreviousPage
-        startCursor
-        endCursor
-      }
-    }
-  }
-`)
-
-export const listGitlabRepositoryProviders = graphql(/* GraphQL */ `
-  query ListGitlabRepositoryProviders(
-    $ids: [ID!]
-    $after: String
-    $before: String
-    $first: Int
-    $last: Int
-  ) {
-    gitlabRepositoryProviders(
+    integratedRepositories(
       ids: $ids
+      kind: $kind
+      active: $active
       after: $after
       before: $before
       first: $first
@@ -257,7 +239,20 @@ export const listGitlabRepositoryProviders = graphql(/* GraphQL */ `
         node {
           id
           displayName
-          status
+          gitUrl
+          active
+          sourceId
+          jobInfo {
+            lastJobRun {
+              id
+              job
+              createdAt
+              finishedAt
+              startedAt
+              exitCode
+            }
+            command
+          }
         }
         cursor
       }
@@ -271,18 +266,95 @@ export const listGitlabRepositoryProviders = graphql(/* GraphQL */ `
   }
 `)
 
-export const listGitlabRepositories = graphql(/* GraphQL */ `
-  query ListGitlabRepositories(
-    $providerIds: [ID!]!
-    $active: Boolean
+export const repositoryListQuery = graphql(/* GraphQL */ `
+  query RepositoryList {
+    repositoryList {
+      id
+      name
+      kind
+      gitUrl
+      refs {
+        name
+        commit
+      }
+    }
+  }
+`)
+
+export const repositorySearch = graphql(/* GraphQL */ `
+  query RepositorySearch(
+    $kind: RepositoryKind!
+    $id: ID!
+    $rev: String
+    $pattern: String!
+  ) {
+    repositorySearch(kind: $kind, id: $id, rev: $rev, pattern: $pattern) {
+      type
+      path
+      indices
+    }
+  }
+`)
+
+export const contextInfoQuery = graphql(/* GraphQL */ `
+  query ContextInfo {
+    contextInfo {
+      sources {
+        id
+        sourceKind
+        sourceId
+        sourceName
+      }
+    }
+  }
+`)
+
+export const userGroupsQuery = graphql(/* GraphQL */ `
+  query UserGroups {
+    userGroups {
+      id
+      name
+      createdAt
+      updatedAt
+      members {
+        user {
+          id
+          email
+          name
+          createdAt
+        }
+        isGroupAdmin
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`)
+
+export const listSourceIdAccessPolicies = graphql(/* GraphQL */ `
+  query sourceIdAccessPolicies($sourceId: String!) {
+    sourceIdAccessPolicies(sourceId: $sourceId) {
+      sourceId
+      read {
+        id
+        name
+      }
+    }
+  }
+`)
+
+export const listThreads = graphql(/* GraphQL */ `
+  query ListThreads(
+    $ids: [ID!]
+    $isEphemeral: Boolean
     $after: String
     $before: String
     $first: Int
     $last: Int
   ) {
-    gitlabRepositories(
-      providerIds: $providerIds
-      active: $active
+    threads(
+      ids: $ids
+      isEphemeral: $isEphemeral
       after: $after
       before: $before
       first: $first
@@ -291,11 +363,9 @@ export const listGitlabRepositories = graphql(/* GraphQL */ `
       edges {
         node {
           id
-          vendorId
-          gitlabRepositoryProviderId
-          name
-          gitUrl
-          active
+          userId
+          createdAt
+          updatedAt
         }
         cursor
       }
@@ -305,6 +375,146 @@ export const listGitlabRepositories = graphql(/* GraphQL */ `
         startCursor
         endCursor
       }
+    }
+  }
+`)
+
+export const listThreadMessages = graphql(/* GraphQL */ `
+  query ListThreadMessages(
+    $threadId: ID!
+    $after: String
+    $before: String
+    $first: Int
+    $last: Int
+  ) {
+    threadMessages(
+      threadId: $threadId
+      after: $after
+      before: $before
+      first: $first
+      last: $last
+    ) {
+      edges {
+        node {
+          id
+          threadId
+          codeSourceId
+          role
+          content
+          attachment {
+            code {
+              gitUrl
+              commit
+              filepath
+              language
+              content
+              startLine
+            }
+            clientCode {
+              filepath
+              content
+              startLine
+            }
+            doc {
+              __typename
+              ... on MessageAttachmentWebDoc {
+                title
+                link
+                content
+              }
+              ... on MessageAttachmentIssueDoc {
+                title
+                link
+                author {
+                  id
+                  email
+                  name
+                }
+                body
+                closed
+              }
+              ... on MessageAttachmentPullDoc {
+                title
+                link
+                author {
+                  id
+                  email
+                  name
+                }
+                body
+                merged
+              }
+            }
+          }
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+`)
+
+export const setThreadPersistedMutation = graphql(/* GraphQL */ `
+  mutation SetThreadPersisted($threadId: ID!) {
+    setThreadPersisted(threadId: $threadId)
+  }
+`)
+
+export const notificationsQuery = graphql(/* GraphQL */ `
+  query Notifications {
+    notifications {
+      id
+      content
+      read
+      createdAt
+    }
+  }
+`)
+
+export const ldapCredentialQuery = graphql(/* GraphQL */ `
+  query LdapCredential {
+    ldapCredential {
+      host
+      port
+      bindDn
+      baseDn
+      userFilter
+      encryption
+      skipTlsVerify
+      emailAttribute
+      nameAttribute
+      createdAt
+      updatedAt
+    }
+  }
+`)
+
+export const oauthCredential = graphql(/* GraphQL */ `
+  query OAuthCredential($provider: OAuthProvider!) {
+    oauthCredential(provider: $provider) {
+      provider
+      clientId
+      createdAt
+      updatedAt
+    }
+  }
+`)
+
+export const repositorySourceListQuery = graphql(/* GraphQL */ `
+  query RepositorySourceList {
+    repositoryList {
+      id
+      name
+      kind
+      gitUrl
+      sourceId
+      sourceName
+      sourceKind
     }
   }
 `)

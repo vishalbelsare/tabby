@@ -4,11 +4,12 @@ import { Toaster } from '@/components/ui/sonner'
 
 import '@/app/globals.css'
 
-import { fontMono, fontSans } from '@/lib/fonts'
+import { fontMono, fontMontserrat, fontSans } from '@/lib/fonts'
 import { cn } from '@/lib/utils'
-import { DemoBanner } from '@/components/demo-banner'
 import { Providers } from '@/components/providers'
 import { TailwindIndicator } from '@/components/tailwind-indicator'
+
+import Main from './components/main'
 
 export const metadata: Metadata = {
   title: {
@@ -19,7 +20,8 @@ export const metadata: Metadata = {
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: 'white' },
     { media: '(prefers-color-scheme: dark)', color: 'black' }
-  ]
+  ],
+  icons: '/favicon.ico'
 }
 
 interface RootLayoutProps {
@@ -32,16 +34,14 @@ export default function RootLayout({ children }: RootLayoutProps) {
       <head />
       <body
         className={cn(
-          'font-sans antialiased',
+          'bg-transparent font-sans antialiased',
           fontSans.variable,
-          fontMono.variable
+          fontMono.variable,
+          fontMontserrat.variable
         )}
       >
         <Providers attribute="class" defaultTheme="system" enableSystem>
-          <div className="flex min-h-screen flex-col">
-            <DemoBanner />
-            {children}
-          </div>
+          <Main>{children}</Main>
           <Toaster richColors closeButton />
           <TailwindIndicator />
         </Providers>

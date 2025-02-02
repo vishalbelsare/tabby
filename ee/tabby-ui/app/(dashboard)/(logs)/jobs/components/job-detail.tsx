@@ -10,17 +10,15 @@ import { useQuery } from 'urql'
 import { listJobRuns } from '@/lib/tabby/query'
 import { cn } from '@/lib/utils'
 import {
-  IconAlertTriangle,
   IconChevronLeft,
   IconClock,
   IconHistory,
-  IconStopWatch,
-  IconTerminalSquare
+  IconSpinner,
+  IconStopWatch
 } from '@/components/ui/icons'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ListSkeleton } from '@/components/skeleton'
 
-import { getLabelByExitCode } from '../utils/state'
+import { getJobDisplayName, getLabelByJobRun } from '../utils'
 
 export default function JobRunDetail() {
   const router = useRouter()
@@ -33,6 +31,19 @@ export default function JobRunDetail() {
   })
 
   const currentNode = data?.jobRuns?.edges?.[0]?.node
+
+  const stateLabel = getLabelByJobRun(currentNode)
+  const isPending =
+    (stateLabel === 'Pending' || stateLabel === 'Running') &&
+    !currentNode?.stdout
+
+  const handleBackNavigation = () => {
+    if (typeof window !== 'undefined' && window.history.length <= 1) {
+      router.push('/jobs')
+    } else {
+      router.back()
+    }
+  }
 
   React.useEffect(() => {
     let timer: number
@@ -58,26 +69,36 @@ export default function JobRunDetail() {
           {currentNode && (
             <>
               <div
-                onClick={() => router.back()}
+                onClick={handleBackNavigation}
                 className="-ml-1 flex cursor-pointer items-center transition-opacity hover:opacity-60"
               >
                 <IconChevronLeft className="mr-1 h-6 w-6" />
                 <h2 className="scroll-m-20 text-3xl font-bold tracking-tight first:mt-0">
-                  {currentNode.job}
+                  {getJobDisplayName(currentNode.job)}
                 </h2>
               </div>
-              <div className="mb-8 flex gap-x-5 text-sm text-muted-foreground lg:gap-x-10">
+              <div className="mb-2 flex gap-x-5 text-sm text-muted-foreground lg:gap-x-10">
                 <div className="flex items-center gap-1">
                   <IconStopWatch />
-                  <p>State: {getLabelByExitCode(currentNode.exitCode)}</p>
+                  <p>State: {stateLabel}</p>
                 </div>
 
                 {currentNode.createdAt && (
                   <div className="flex items-center gap-1">
                     <IconClock />
                     <p>
-                      Started:{' '}
+                      Created:{' '}
                       {moment(currentNode.createdAt).format('YYYY-MM-DD HH:mm')}
+                    </p>
+                  </div>
+                )}
+
+                {currentNode.startedAt && (
+                  <div className="flex items-center gap-1">
+                    <IconClock />
+                    <p>
+                      Started:{' '}
+                      {moment(currentNode.startedAt).format('YYYY-MM-DD HH:mm')}
                     </p>
                   </div>
                 )}
@@ -91,7 +112,7 @@ export default function JobRunDetail() {
                         moment
                           .duration(
                             moment(currentNode.finishedAt).diff(
-                              currentNode.createdAt
+                              currentNode.startedAt
                             )
                           )
                           .asMilliseconds()
@@ -100,26 +121,9 @@ export default function JobRunDetail() {
                   </div>
                 )}
               </div>
-              <Tabs defaultValue="stdout" className="flex flex-1 flex-col">
-                <TabsList className="grid w-[400px] grid-cols-2">
-                  <TabsTrigger value="stdout">
-                    <IconTerminalSquare className="mr-1" />
-                    stdout
-                  </TabsTrigger>
-                  <TabsTrigger value="stderr">
-                    <IconAlertTriangle className="mr-1" />
-                    stderr
-                  </TabsTrigger>
-                </TabsList>
-                <div className="flex flex-1 flex-col">
-                  <TabsContent value="stdout">
-                    <StdoutView value={currentNode?.stdout} />
-                  </TabsContent>
-                  <TabsContent value="stderr">
-                    <StdoutView value={currentNode?.stderr} />
-                  </TabsContent>
-                </div>
-              </Tabs>
+              <div className="flex flex-1 flex-col">
+                <StdoutView value={currentNode?.stdout} pending={isPending} />
+              </div>
             </>
           )}
         </div>
@@ -132,22 +136,29 @@ function StdoutView({
   children,
   className,
   value,
+  pending,
   ...rest
-}: React.HTMLAttributes<HTMLDivElement> & { value?: string }) {
+}: React.HTMLAttributes<HTMLDivElement> & {
+  value?: string
+  pending?: boolean
+}) {
   return (
     <div
       className={cn(
-        'mt-2 h-[66vh] w-full overflow-y-auto overflow-x-hidden rounded-lg border bg-gray-50 font-mono text-[0.9rem] dark:bg-gray-800',
+        'relative mt-2 h-[72vh] w-full overflow-y-auto overflow-x-hidden rounded-lg border bg-gray-50 font-mono text-[0.9rem] dark:bg-gray-800',
         className
       )}
       {...rest}
     >
-      {value ? (
+      {pending && !value && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+          <IconSpinner className="h-8 w-8" />
+        </div>
+      )}
+      {value && (
         <pre className="whitespace-pre-wrap p-4">
           <Ansi>{value}</Ansi>
         </pre>
-      ) : (
-        <div className="p-4">No Data</div>
       )}
     </div>
   )

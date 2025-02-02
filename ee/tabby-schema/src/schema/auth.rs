@@ -4,13 +4,16 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject, ID};
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::error;
 use validator::Validate;
 
+use super::interface::UserValue;
 use crate::{
     juniper::relay,
+    policy::AccessPolicy,
     schema::{Context, Result},
 };
 
@@ -57,15 +60,20 @@ pub struct TokenAuthInput {
     pub email: String,
     #[validate(length(
         min = 8,
-        code = "password",
-        message = "Password must be at least 8 characters"
-    ))]
-    #[validate(length(
         max = 20,
         code = "password",
-        message = "Password must be at most 20 characters"
+        message = "Password must be between 8 and 20 characters"
     ))]
     pub password: String,
+}
+
+/// Input parameters for token_auth_ldap mutation
+#[derive(Validate)]
+pub struct TokenAuthLdapInput<'a> {
+    #[validate(length(min = 1, code = "user_id", message = "User ID should not be empty"))]
+    pub user_id: &'a str,
+    #[validate(length(min = 1, code = "password", message = "Password should not be empty"))]
+    pub password: &'a str,
 }
 
 /// Input parameters for register mutation
@@ -84,15 +92,11 @@ pub struct RegisterInput {
     pub email: String,
     #[validate(length(
         min = 8,
-        code = "password1",
-        message = "Password must be at least 8 characters"
-    ))]
-    #[validate(length(
         max = 20,
         code = "password1",
-        message = "Password must be at most 20 characters"
+        message = "Password must be between 8 and 20 characters"
     ))]
-    #[validate(custom = "validate_password")]
+    #[validate(custom(function = "validate_password"))]
     pub password1: String,
     #[validate(must_match(
         code = "password2",
@@ -162,28 +166,48 @@ pub struct JWTPayload {
 
     /// User id string
     pub sub: ID,
+
+    /// Whether the token is generated from auth token based authentication
+    #[serde(skip)]
+    pub is_generated_from_auth_token: bool,
 }
 
 impl JWTPayload {
-    pub fn new(id: ID, iat: i64, exp: i64) -> Self {
-        Self { sub: id, iat, exp }
+    pub fn new(id: ID, iat: i64, exp: i64, is_generated_from_auth_token: bool) -> Self {
+        Self {
+            sub: id,
+            iat,
+            exp,
+            is_generated_from_auth_token,
+        }
     }
 }
 
-#[derive(Debug, GraphQLObject)]
-#[graphql(context = Context)]
-pub struct User {
+#[derive(Debug, GraphQLObject, Clone)]
+#[graphql(context = Context, impl = [UserValue])]
+pub struct UserSecured {
+    // === implements User ===
     pub id: juniper::ID,
     pub email: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
     pub is_admin: bool,
     pub is_owner: bool,
-    pub auth_token: String,
-    pub created_at: DateTime<Utc>,
     pub active: bool,
+    // === end User ===
+    pub auth_token: String,
     pub is_password_set: bool,
+
+    // is_sso_user is used to indicate if the user is created by SSO
+    // and should not be able to change Name and Password
+    // e.g. LDAP, OAuth users
+    pub is_sso_user: bool,
+
+    #[graphql(skip)]
+    pub policy: AccessPolicy,
 }
 
-impl relay::NodeType for User {
+impl relay::NodeType for UserSecured {
     type Cursor = String;
 
     fn cursor(&self) -> Self::Cursor {
@@ -191,11 +215,11 @@ impl relay::NodeType for User {
     }
 
     fn connection_type_name() -> &'static str {
-        "UserConnection"
+        "UserSecuredConnection"
     }
 
     fn edge_type_name() -> &'static str {
-        "UserEdge"
+        "UserSecuredEdge"
     }
 }
 
@@ -216,25 +240,17 @@ pub struct PasswordResetInput {
     pub code: String,
     #[validate(length(
         min = 8,
-        code = "password1",
-        message = "Password must be at least 8 characters"
-    ))]
-    #[validate(length(
         max = 20,
         code = "password1",
-        message = "Password must be at most 20 characters"
+        message = "Password must be between 8 and 20 characters"
     ))]
-    #[validate(custom = "validate_password")]
+    #[validate(custom(function = "validate_password"))]
     pub password1: String,
     #[validate(length(
         min = 8,
-        code = "password2",
-        message = "Password must be at least 8 characters"
-    ))]
-    #[validate(length(
         max = 20,
         code = "password2",
-        message = "Password must be at most 20 characters"
+        message = "Password must be between 8 and 20 characters"
     ))]
     #[validate(must_match(
         code = "password2",
@@ -250,25 +266,17 @@ pub struct PasswordChangeInput {
 
     #[validate(length(
         min = 8,
-        code = "newPassword1",
-        message = "Password must be at least 8 characters"
-    ))]
-    #[validate(length(
         max = 20,
         code = "newPassword1",
-        message = "Password must be at most 20 characters"
+        message = "Password must be between 8 and 20 characters"
     ))]
-    #[validate(custom = "validate_new_password")]
+    #[validate(custom(function = "validate_new_password"))]
     pub new_password1: String,
     #[validate(length(
         min = 8,
-        code = "newPassword2",
-        message = "Password must be at least 8 characters"
-    ))]
-    #[validate(length(
         max = 20,
         code = "newPassword2",
-        message = "Password must be at most 20 characters"
+        message = "Password must be between 8 and 20 characters"
     ))]
     #[validate(must_match(
         code = "newPassword2",
@@ -276,6 +284,22 @@ pub struct PasswordChangeInput {
         other = "new_password1"
     ))]
     pub new_password2: String,
+}
+
+#[derive(Validate)]
+pub struct UpdateUserNameInput {
+    #[validate(length(
+        min = 2,
+        max = 20,
+        code = "name",
+        message = "Name must be between 2 and 20 characters"
+    ))]
+    #[validate(regex(
+        code = "name",
+        path = "*crate::schema::constants::USERNAME_REGEX",
+        message = "Invalid name, name may contain numbers or special characters which are not supported"
+    ))]
+    pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, GraphQLObject)]
@@ -304,11 +328,41 @@ impl relay::NodeType for Invitation {
     }
 }
 
-#[derive(GraphQLEnum, Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(GraphQLEnum, Clone, Serialize, Deserialize, PartialEq, Debug, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum OAuthProvider {
     Github,
     Google,
+    Gitlab,
+}
+
+#[derive(GraphQLEnum, Clone, Serialize, Deserialize, PartialEq, Debug)]
+pub enum AuthProviderKind {
+    OAuthGithub,
+    OAuthGoogle,
+    OAuthGitlab,
+    Ldap,
+}
+
+impl From<OAuthProvider> for AuthProvider {
+    fn from(provider: OAuthProvider) -> Self {
+        match provider {
+            OAuthProvider::Github => AuthProvider {
+                kind: AuthProviderKind::OAuthGithub,
+            },
+            OAuthProvider::Google => AuthProvider {
+                kind: AuthProviderKind::OAuthGoogle,
+            },
+            OAuthProvider::Gitlab => AuthProvider {
+                kind: AuthProviderKind::OAuthGitlab,
+            },
+        }
+    }
+}
+
+#[derive(GraphQLObject)]
+pub struct AuthProvider {
+    pub kind: AuthProviderKind,
 }
 
 #[derive(GraphQLObject)]
@@ -337,6 +391,65 @@ pub struct UpdateOAuthCredentialInput {
     pub client_secret: Option<String>,
 }
 
+#[derive(GraphQLEnum, PartialEq, Debug)]
+pub enum LdapEncryptionKind {
+    None,
+    StartTLS,
+    LDAPS,
+}
+
+#[derive(GraphQLInputObject, Validate)]
+pub struct UpdateLdapCredentialInput {
+    #[validate(length(
+        min = 1,
+        code = "host",
+        message = "host should not be empty and should be a valid hostname or IP address"
+    ))]
+    pub host: String,
+    pub port: i32,
+
+    #[validate(length(min = 1, code = "bindDn", message = "bindDn cannot be empty"))]
+    pub bind_dn: String,
+    pub bind_password: Option<String>,
+
+    #[validate(length(min = 1, code = "baseDn", message = "baseDn cannot be empty"))]
+    pub base_dn: String,
+    #[validate(length(
+        min = 1,
+        code = "userFilter",
+        message = "userFilter cannot be empty, and should be in the format of `(uid=%s)`"
+    ))]
+    pub user_filter: String,
+
+    pub encryption: LdapEncryptionKind,
+    pub skip_tls_verify: bool,
+
+    #[validate(length(
+        min = 1,
+        code = "emailAttribute",
+        message = "emailAttribute cannot be empty"
+    ))]
+    pub email_attribute: String,
+    // if name_attribute is None, we will use username as name
+    pub name_attribute: Option<String>,
+}
+
+#[derive(GraphQLObject)]
+pub struct LdapCredential {
+    pub host: String,
+    pub port: i32,
+    pub bind_dn: String,
+    pub base_dn: String,
+    pub user_filter: String,
+    pub encryption: LdapEncryptionKind,
+    pub skip_tls_verify: bool,
+    pub email_attribute: String,
+    pub name_attribute: Option<String>,
+
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[async_trait]
 pub trait AuthenticationService: Send + Sync {
     async fn register(
@@ -344,16 +457,20 @@ pub trait AuthenticationService: Send + Sync {
         email: String,
         password1: String,
         invitation_code: Option<String>,
+        name: Option<String>,
     ) -> Result<RegisterResponse>;
     async fn allow_self_signup(&self) -> Result<bool>;
 
     async fn token_auth(&self, email: String, password: String) -> Result<TokenAuthResponse>;
 
+    async fn token_auth_ldap(&self, email: &str, password: &str) -> Result<TokenAuthResponse>;
+
     async fn refresh_token(&self, refresh_token: String) -> Result<RefreshTokenResponse>;
     async fn verify_access_token(&self, access_token: &str) -> Result<JWTPayload>;
+    async fn verify_auth_token(&self, token: &str) -> Result<ID>;
     async fn is_admin_initialized(&self) -> Result<bool>;
-    async fn get_user_by_email(&self, email: &str) -> Result<User>;
-    async fn get_user(&self, id: &ID) -> Result<User>;
+    async fn get_user_by_email(&self, email: &str) -> Result<UserSecured>;
+    async fn get_user(&self, id: &ID) -> Result<UserSecured>;
     async fn logout_all_sessions(&self, id: &ID) -> Result<()>;
 
     async fn create_invitation(&self, email: String) -> Result<Invitation>;
@@ -362,6 +479,7 @@ pub trait AuthenticationService: Send + Sync {
 
     async fn reset_user_auth_token(&self, id: &ID) -> Result<()>;
     async fn password_reset(&self, code: &str, password: &str) -> Result<()>;
+    async fn generate_reset_password_url(&self, id: &ID) -> Result<String>;
     async fn request_password_reset_email(&self, email: String) -> Result<Option<JoinHandle<()>>>;
     async fn update_user_password(
         &self,
@@ -376,7 +494,7 @@ pub trait AuthenticationService: Send + Sync {
         before: Option<String>,
         first: Option<usize>,
         last: Option<usize>,
-    ) -> Result<Vec<User>>;
+    ) -> Result<Vec<UserSecured>>;
 
     async fn list_invitations(
         &self,
@@ -400,12 +518,18 @@ pub trait AuthenticationService: Send + Sync {
     ) -> Result<Option<OAuthCredential>>;
 
     async fn update_oauth_credential(&self, input: UpdateOAuthCredentialInput) -> Result<()>;
-
     async fn delete_oauth_credential(&self, provider: OAuthProvider) -> Result<()>;
+
+    async fn read_ldap_credential(&self) -> Result<Option<LdapCredential>>;
+    async fn test_ldap_connection(&self, input: UpdateLdapCredentialInput) -> Result<()>;
+    async fn update_ldap_credential(&self, input: UpdateLdapCredentialInput) -> Result<()>;
+    async fn delete_ldap_credential(&self) -> Result<()>;
+
     async fn update_user_active(&self, id: &ID, active: bool) -> Result<()>;
     async fn update_user_role(&self, id: &ID, is_admin: bool) -> Result<()>;
     async fn update_user_avatar(&self, id: &ID, avatar: Option<Box<[u8]>>) -> Result<()>;
     async fn get_user_avatar(&self, id: &ID) -> Result<Option<Box<[u8]>>>;
+    async fn update_user_name(&self, id: &ID, name: String) -> Result<()>;
 }
 
 fn validate_password(value: &str) -> Result<(), validator::ValidationError> {

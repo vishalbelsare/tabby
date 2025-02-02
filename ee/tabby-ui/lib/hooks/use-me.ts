@@ -6,10 +6,13 @@ const meQuery = graphql(/* GraphQL */ `
   query MeQuery {
     me {
       id
-      authToken
       email
+      name
       isAdmin
+      isOwner
+      authToken
       isPasswordSet
+      isSsoUser
     }
   }
 `)

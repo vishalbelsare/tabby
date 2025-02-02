@@ -23,7 +23,7 @@ pub struct ChatCompletionChoice {
 
 #[derive(Deserialize)]
 pub struct ChatCompletionDelta {
-    content: String,
+    content: Option<String>,
 }
 
 lazy_static! {
@@ -74,21 +74,24 @@ async fn wait_for_server(gpu_device: Option<&str>) {
 
     loop {
         println!("Waiting for server to start...");
-        let is_ok = reqwest::get("http://localhost:9090/v1/health")
-            .await
-            .is_ok();
-        if is_ok {
-            break;
-        } else {
-            sleep(Duration::from_secs(5)).await;
+        match reqwest::get("http://127.0.0.1:9090/v1/health").await {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    break;
+                }
+            }
+            Err(e) => {
+                println!("Waiting for server to start: {:?}", e);
+            }
         }
+        sleep(Duration::from_secs(5)).await;
     }
 }
 
 async fn golden_test(body: serde_json::Value) -> String {
     let mut es = EventSource::new(
         CLIENT
-            .post("http://localhost:9090/v1/chat/completions")
+            .post("http://127.0.0.1:9090/v1/chat/completions")
             .json(&body),
     )
     .unwrap();
@@ -99,10 +102,23 @@ async fn golden_test(body: serde_json::Value) -> String {
             Ok(Event::Open) => {}
             Ok(Event::Message(message)) => {
                 let x: ChatCompletionChunk = serde_json::from_str(&message.data).unwrap();
-                actual += &x.choices[0].delta.content;
+                if let Some(content) = &x.choices[0].delta.content {
+                    actual += content
+                }
             }
-            Err(_) => {
-                // StreamEnd
+            Err(e) => {
+                match e {
+                    reqwest_eventsource::Error::StreamEnded => {
+                        break;
+                    }
+                    reqwest_eventsource::Error::InvalidStatusCode(code, resp) => {
+                        let resp = resp.text().await.unwrap();
+                        println!("Error: {} {:?}", code, resp);
+                    }
+                    e => {
+                        println!("Error: {:?}", e);
+                    }
+                }
                 break;
             }
         }
@@ -125,6 +141,7 @@ async fn run_chat_golden_tests() {
 
     assert_golden!(json!({
             "seed": 0,
+            "model": "default",
             "messages": [
                 {
                     "role": "user",
@@ -135,6 +152,7 @@ async fn run_chat_golden_tests() {
 
     assert_golden!(json!({
             "seed": 0,
+            "model": "default",
             "messages": [
                 {
                     "role": "user",
@@ -151,6 +169,7 @@ async fn run_chat_golden_tests_cpu() {
 
     assert_golden!(json!({
             "seed": 0,
+            "model": "default",
             "messages": [
                 {
                     "role": "user",

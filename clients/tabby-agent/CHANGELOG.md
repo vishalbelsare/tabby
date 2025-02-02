@@ -1,3 +1,47 @@
+## 1.8.0
+
+### Breaking Changes
+
+- Removed the deprecated `TabbyAgent` interface and related types.
+
+### Features
+
+- Added support for HTTP proxy configuration, defaulting to using HTTP proxy settings in environment variables.
+- Included a default git context provider based on the system git command for collecting git repo context.
+- Introduced `tabby/status` and `tabby/config` methods, deprecating `tabby/agent` methods.
+- Added a method to sync all visible editor ranges for collecting code snippet context to enhance code completion generation.
+
+### Fixes & Improvements
+
+- Added more controls in the initialization options for better compatibility.
+- Added a configurable minimal text length threshold to display the completion item.
+
+## 1.7.0
+
+### Breaking Changes
+
+- The tabby-agent will only support running as a language server starting from version 1.7.0.
+
+### Features
+
+- Added support for collecting relative code snippets to enhance code completion.
+- Extended the protocol by adding a new method to support inline chat editing.
+
+### Fixes & Improvements
+
+- Fixed a bug that caused unexpected logging output and the generation of an audit.json file in the working directory.
+
+## 1.6.0
+
+### Features
+
+- Added support for multiple choices in inline completion.
+- Introduced an experimental feature to generate commit messages.
+
+### Fixes & Improvements
+
+- Improved logging, logging levels can now be set to `silent`, `error`, `info`, `debug` or `verbose`.
+
 ## 1.5.0
 
 ### Features
